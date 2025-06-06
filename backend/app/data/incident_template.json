@@ -1,0 +1,15 @@
+{
+  "date_time": "DateTime",
+  "service_user_name": "Text",
+  "location": "Text",
+  "incident_type": "Text",
+  "description": "Text",
+  "immediate_actions": "Text",
+  "first_aid_administered": "Boolean",
+  "emergency_services_contacted": "Boolean",
+  "who_was_notified": "Text",
+  "witnesses": "Text",
+  "agreed_next_steps": "Text",
+  "risk_assessment_needed": "Boolean",
+  "risk_assessment_type": "Text"
+}
