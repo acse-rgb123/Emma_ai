@@ -14,6 +14,7 @@ function App() {
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const [systemStatus, setSystemStatus] = useState(null);
   const [updateCounter, setUpdateCounter] = useState(0); // Force re-render
+  const [updateSuccess, setUpdateSuccess] = useState(null); // Track successful updates
 
   useEffect(() => {
     // Check system health on load
@@ -73,6 +74,7 @@ function App() {
         
         // Show success message
         setError(null);
+        setUpdateSuccess(`${updateType === 'incident_report' ? 'Incident report' : 'Email draft'} updated successfully!`);
       } else {
         throw new Error('Update failed');
       }
@@ -105,6 +107,8 @@ function App() {
             error={error}
             hasAnalysis={!!analysisResult}
             sessionId={sessionId}
+            updateSuccess={updateSuccess}
+            onClearSuccess={() => setUpdateSuccess(null)}
             key={`chat-${updateCounter}`}
           />
         );

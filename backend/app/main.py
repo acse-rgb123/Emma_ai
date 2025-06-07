@@ -192,6 +192,42 @@ async def update_analysis(request: Dict[str, Any]):
             email_draft = updated_email
             incident_report = last_analysis["incident_report"]  # Keep original report
             
+        elif update_type == "transcript_update":
+            # Handle transcript updates by re-analyzing with additional transcript content
+            logger.info(f"Updating analysis with additional transcript: '{new_info[:100]}{'...' if len(new_info) > 100 else ''}'")
+            
+            # Combine original transcript with new transcript information
+            combined_transcript = f"""
+Original Transcript:
+{last_analysis['transcript']}
+
+Additional Transcript Information:
+{new_info}
+"""
+            
+            # Re-analyze with combined transcript
+            analysis_result = await policy_analyzer.analyze(combined_transcript)
+            
+            # Generate new report and email based on updated analysis
+            updated_report = await report_generator.generate_report(
+                transcript=combined_transcript,
+                analysis=analysis_result
+            )
+            
+            updated_email = await email_generator.generate_email(
+                incident_report=updated_report,
+                analysis=analysis_result
+            )
+            
+            # Update stored data
+            last_analysis["transcript"] = combined_transcript
+            last_analysis["analysis"] = analysis_result
+            last_analysis["incident_report"] = updated_report
+            last_analysis["email_draft"] = updated_email
+            
+            incident_report = updated_report
+            email_draft = updated_email
+            
         else:
             # Fallback to original method for backward compatibility
             logger.warning(f"Unknown update_type: {update_type}, using fallback")
