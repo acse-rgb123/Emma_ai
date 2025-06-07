@@ -1,4 +1,16 @@
 
+import os
+import logging
+from typing import Dict, Any
+from fastapi import HTTPException
+
+from app.multi_provider_config import multi_settings
+from app.services.analyzer import PolicyAnalyzer
+from app.services.report_generator import ReportGenerator
+from app.services.email_generator import EmailGenerator
+
+logger = logging.getLogger(__name__)
+
 @app.post("/api/update_keys")
 async def update_api_keys(request: Dict[str, Any]):
     """Update API keys from frontend configuration"""
@@ -12,7 +24,6 @@ async def update_api_keys(request: Dict[str, Any]):
             os.environ["GEMINI_API_KEY"] = request["gemini_key"]
         
         # Update multi_settings
-        from app.multi_provider_config import multi_settings
         multi_settings.openai_api_key = request.get("openai_key")
         multi_settings.claude_api_key = request.get("claude_key")
         multi_settings.gemini_api_key = request.get("gemini_key")

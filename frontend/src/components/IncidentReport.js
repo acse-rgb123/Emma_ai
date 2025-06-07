@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-function IncidentReport({ report, onRegenerate, loading, onUpdate }) {
-  const [feedback, setFeedback] = useState('');
-  const [showFeedback, setShowFeedback] = useState(false);
+function IncidentReport({ report, loading, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState({});
 
@@ -43,14 +41,6 @@ function IncidentReport({ report, onRegenerate, loading, onUpdate }) {
     }));
   };
 
-  const handleRegenerateSubmit = (e) => {
-    e.preventDefault();
-    if (feedback.trim()) {
-      onRegenerate(feedback);
-      setFeedback('');
-      setShowFeedback(false);
-    }
-  };
 
   const downloadReport = () => {
     const reportText = JSON.stringify(isEditing ? editedReport : report, null, 2);
@@ -82,13 +72,6 @@ function IncidentReport({ report, onRegenerate, loading, onUpdate }) {
               <button onClick={downloadReport} className="btn btn-secondary">
                 Download Report
               </button>
-              <button 
-                onClick={() => setShowFeedback(!showFeedback)} 
-                className="btn btn-secondary"
-                disabled={loading}
-              >
-                {showFeedback ? 'Cancel' : 'Regenerate with Feedback'}
-              </button>
             </>
           ) : (
             <>
@@ -103,25 +86,6 @@ function IncidentReport({ report, onRegenerate, loading, onUpdate }) {
         </div>
       </div>
 
-      {showFeedback && (
-        <form onSubmit={handleRegenerateSubmit} className="feedback-form">
-          <textarea
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="Provide feedback on what should be changed or improved..."
-            rows={3}
-            className="feedback-input"
-            disabled={loading}
-          />
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            disabled={loading || !feedback.trim()}
-          >
-            {loading ? 'Regenerating...' : 'Apply Feedback'}
-          </button>
-        </form>
-      )}
 
       <div className="report-content">
         <div className="report-section">

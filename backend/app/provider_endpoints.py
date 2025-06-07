@@ -1,6 +1,12 @@
-from fastapi import HTTPException
-from app.multi_provider_config import multi_settings
 import logging
+from typing import Dict, Any
+
+from fastapi import HTTPException
+
+from app.multi_provider_config import multi_settings
+from app.services.analyzer import PolicyAnalyzer
+from app.services.report_generator import ReportGenerator
+from app.services.email_generator import EmailGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +24,6 @@ async def switch_provider(provider: str):
     multi_settings.active_provider = provider
     
     # Reinitialize services with new provider
-    from app.services.analyzer import PolicyAnalyzer
-    from app.services.report_generator import ReportGenerator
-    from app.services.email_generator import EmailGenerator
     
     # These would need to be globals in main.py
     global policy_analyzer, report_generator, email_generator

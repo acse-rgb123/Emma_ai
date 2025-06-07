@@ -1,16 +1,22 @@
+# Standard library imports
+import json
+import logging
+import os
+from datetime import datetime
+from typing import Dict, Any, Optional
+
+# Third-party imports
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import logging
-import json
-from typing import Dict, Any, Optional
-import os
-from datetime import datetime
 
+# Local application imports
 from app.models import TranscriptRequest, IncidentResponse
 from app.services.analyzer import PolicyAnalyzer
-from app.services.report_generator import ReportGenerator
 from app.services.email_generator import EmailGenerator
+from app.services.email_updater import EmailUpdater
+from app.services.report_generator import ReportGenerator
+from app.services.report_updater import ReportUpdater
 
 # Configure detailed logging
 logging.basicConfig(
@@ -34,6 +40,8 @@ app.add_middleware(
 policy_analyzer = PolicyAnalyzer()
 report_generator = ReportGenerator()
 email_generator = EmailGenerator()
+report_updater = ReportUpdater()
+email_updater = EmailUpdater()
 
 # Store conversation context
 conversation_contexts = {}
@@ -105,12 +113,12 @@ async def analyze_transcript(request: TranscriptRequest):
 @app.post("/update_analysis")
 async def update_analysis(request: Dict[str, Any]):
     """
-    Update existing analysis with new information
+    Update existing analysis with new information using LLM-based approach
     """
     try:
         session_id = request.get("session_id", "default")
         new_info = request.get("new_information", "")
-        update_type = request.get("update_type", "general")
+        update_type = request.get("update_type", "incident_report")  # Default to incident_report
         
         context = conversation_contexts.get(session_id, {})
         if not context.get("last_analysis"):
@@ -118,50 +126,91 @@ async def update_analysis(request: Dict[str, Any]):
         
         last_analysis = context["last_analysis"]
         
-        # Combine original transcript with new information
-        updated_context = f"""
-Original Transcript:
-{last_analysis['transcript']}
-
-Additional Information ({update_type}):
-{new_info}
-"""
+        logger.info(f"Updating {update_type} with new information: {new_info[:100]}...")
         
-        # Re-analyze with updated context
-        logger.info(f"Updating analysis with new information: {new_info[:100]}...")
+        # Create context for the updaters
+        update_context = {
+            "original_transcript": last_analysis["transcript"],
+            "original_analysis": last_analysis["analysis"],
+            "session_id": session_id
+        }
         
-        analysis_result = await policy_analyzer.analyze(updated_context)
-        
-        # Update reports if needed
-        if update_type in ["incident_details", "all"]:
-            incident_report = await report_generator.generate_report(
-                transcript=updated_context,
-                analysis=analysis_result
+        # Update based on type using LLM services
+        if update_type == "incident_report":
+            # Validate original report exists
+            if not last_analysis.get("incident_report"):
+                raise ValueError("No incident report found to update")
+            
+            logger.info(f"Updating incident report with: '{new_info[:100]}{'...' if len(new_info) > 100 else ''}'")
+            
+            # Log current report data for debugging
+            current_report = last_analysis["incident_report"]
+            logger.debug(f"Current report data being sent to LLM: {json.dumps(current_report, indent=2)}")
+            
+            # Update incident report using LLM
+            updated_report = await report_updater.update_report(
+                original_report=current_report,
+                update_info=new_info,
+                context=update_context
             )
-            last_analysis["incident_report"] = incident_report
+            
+            # Verify update was successful
+            if updated_report == last_analysis["incident_report"]:
+                logger.warning("No changes detected in updated report")
+            else:
+                logger.info("Incident report successfully updated")
+                
+            last_analysis["incident_report"] = updated_report
+            incident_report = updated_report
+            email_draft = last_analysis["email_draft"]  # Keep original email
+            
+        elif update_type == "email_update":
+            # Validate original email exists
+            if not last_analysis.get("email_draft"):
+                raise ValueError("No email draft found to update")
+            
+            logger.info(f"Updating email draft with: '{new_info[:100]}{'...' if len(new_info) > 100 else ''}'")
+            
+            # Log current email data for debugging
+            current_email = last_analysis["email_draft"]
+            logger.debug(f"Current email data being sent to LLM: {json.dumps(current_email, indent=2)}")
+            
+            # Update email using LLM
+            updated_email = await email_updater.update_email(
+                original_email=current_email,
+                update_info=new_info,
+                context=update_context
+            )
+            
+            # Verify update was successful
+            if updated_email == last_analysis["email_draft"]:
+                logger.warning("No changes detected in updated email")
+            else:
+                logger.info("Email draft successfully updated")
+                
+            last_analysis["email_draft"] = updated_email
+            email_draft = updated_email
+            incident_report = last_analysis["incident_report"]  # Keep original report
+            
         else:
+            # Fallback to original method for backward compatibility
+            logger.warning(f"Unknown update_type: {update_type}, using fallback")
             incident_report = last_analysis["incident_report"]
-        
-        if update_type in ["email_update", "all"]:
-            email_draft = await email_generator.generate_email(
-                incident_report=incident_report,
-                analysis=analysis_result
-            )
-            last_analysis["email_draft"] = email_draft
-        else:
             email_draft = last_analysis["email_draft"]
         
-        # Update context
-        last_analysis["analysis"] = analysis_result
+        # Update context with timestamp
         last_analysis["last_update"] = datetime.now().isoformat()
+        last_analysis["last_update_type"] = update_type
+        last_analysis["last_update_info"] = new_info
         
         return {
             "status": "success",
-            "analysis_summary": analysis_result.get("summary", ""),
+            "update_type": update_type,
+            "analysis_summary": last_analysis["analysis"].get("summary", ""),
             "incident_report": incident_report,
             "email_draft": email_draft,
-            "policy_violations": analysis_result.get("violations", []),
-            "recommendations": analysis_result.get("recommendations", [])
+            "policy_violations": last_analysis["analysis"].get("violations", []),
+            "recommendations": last_analysis["analysis"].get("recommendations", [])
         }
         
     except Exception as e:
@@ -219,10 +268,12 @@ async def update_api_keys(request: Dict[str, Any]):
             pass
         
         # Reinitialize services
-        global policy_analyzer, report_generator, email_generator
+        global policy_analyzer, report_generator, email_generator, report_updater, email_updater
         policy_analyzer = PolicyAnalyzer()
         report_generator = ReportGenerator()
         email_generator = EmailGenerator()
+        report_updater = ReportUpdater()
+        email_updater = EmailUpdater()
         
         return {
             "status": "success",

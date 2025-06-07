@@ -19,7 +19,7 @@ Julie Peaterson: "I completely understand, Greg. You're doing great by calling i
 function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessionId }) {
   const [transcript, setTranscript] = useState('');
   const [updateInfo, setUpdateInfo] = useState('');
-  const [updateType, setUpdateType] = useState('general');
+  const [updateType, setUpdateType] = useState('incident_report');
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   const [hasShownSuccess, setHasShownSuccess] = useState(false);
   const [messages, setMessages] = useState([
@@ -49,7 +49,7 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
         // Add success message
         newMessages.push({
           type: 'success',
-          content: 'Analysis completed successfully! You can view the results in the Summary, Report, and Email tabs. You can also provide additional information below to update the analysis.'
+          content: 'Analysis completed successfully! You can view the results in the Summary, Report, and Email tabs. Use the form below to update either the incident report or email draft with additional information.'
         });
         return newMessages;
       });
@@ -193,10 +193,8 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
               className="update-type-select"
               disabled={loading}
             >
-              <option value="general">General Update</option>
-              <option value="incident_details">Incident Details</option>
-              <option value="email_update">Email Information</option>
-              <option value="all">Update All</option>
+              <option value="incident_report">Update Incident Report</option>
+              <option value="email_update">Update Email Draft</option>
             </select>
           </div>
           
@@ -204,7 +202,11 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
             <textarea
               value={updateInfo}
               onChange={(e) => setUpdateInfo(e.target.value)}
-              placeholder="Provide additional information to update the analysis..."
+              placeholder={
+                updateType === 'incident_report' 
+                  ? "Provide additional details to update the incident report (e.g., new injuries discovered, updated timeline, corrected information)..."
+                  : "Provide information to update the email draft (e.g., change recipients, update urgency, add specific instructions)..."
+              }
               className="update-input"
               rows={4}
               disabled={loading}
@@ -217,7 +219,7 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
               className="btn btn-primary"
               disabled={loading || !updateInfo.trim()}
             >
-              {loading ? 'Updating...' : 'Update Analysis'}
+{loading ? 'Updating...' : `Update ${updateType === 'incident_report' ? 'Report' : 'Email'}`}
             </button>
           </div>
         </form>
@@ -229,8 +231,8 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
           <li>Paste the call transcript in the text area above</li>
           <li>Click "Analyze Transcript" to process</li>
           <li>Review the generated incident report and email draft</li>
-          <li>Provide additional information to update the analysis if needed</li>
-          <li>Use feedback options to refine specific components</li>
+          <li>Use the update form to modify either the incident report or email with additional information</li>
+          <li>Use regeneration options in the Report and Email tabs for more extensive changes</li>
         </ol>
         <p className="session-note">Session ID: {sessionId}</p>
       </div>

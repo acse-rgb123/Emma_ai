@@ -4,7 +4,25 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 from pathlib import Path
+
 from app.config import settings
+
+# AI Provider imports
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 try:
     from .analyzer_fix import extract_name_from_transcript, extract_location_from_transcript
 except ImportError:
@@ -22,16 +40,15 @@ class ReportGenerator:
     
     def _setup_ai_client(self):
         """Setup AI client based on provider"""
-        if self.ai_provider == "openai":
-            from openai import OpenAI
+        if self.ai_provider == "openai" and OpenAI:
             self.client = OpenAI(api_key=self.api_key)
-        elif self.ai_provider == "claude":
-            import anthropic
+        elif self.ai_provider == "claude" and anthropic:
             self.client = anthropic.Client(api_key=self.api_key)
-        elif self.ai_provider == "gemini":
-            import google.generativeai as genai
+        elif self.ai_provider == "gemini" and genai:
             genai.configure(api_key=self.api_key)
             self.client = genai.GenerativeModel(settings.gemini_model)
+        else:
+            raise ImportError(f"AI provider {self.ai_provider} not available or not installed")
     
     def _load_template(self) -> Dict[str, str]:
         """Load incident report template"""

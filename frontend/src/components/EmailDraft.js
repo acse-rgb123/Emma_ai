@@ -1,24 +1,32 @@
 import React, { useState } from 'react';
 
-function EmailDraft({ email, onRegenerate, loading }) {
-  const [feedback, setFeedback] = useState('');
-  const [showFeedback, setShowFeedback] = useState(false);
+function EmailDraft({ email, loading }) {
   const [copied, setCopied] = useState(false);
 
-  const handleRegenerateSubmit = (e) => {
-    e.preventDefault();
-    if (feedback.trim()) {
-      onRegenerate(feedback);
-      setFeedback('');
-      setShowFeedback(false);
-    }
+  // Normalize email data to ensure arrays are arrays
+  const normalizeEmailData = (emailData) => {
+    if (!emailData) return null;
+    
+    return {
+      ...emailData,
+      to: Array.isArray(emailData.to) ? emailData.to : 
+          typeof emailData.to === 'string' ? [emailData.to] : [],
+      cc: Array.isArray(emailData.cc) ? emailData.cc : 
+          typeof emailData.cc === 'string' ? [emailData.cc] : 
+          emailData.cc ? [] : [],
+      attachments: Array.isArray(emailData.attachments) ? emailData.attachments : 
+                   typeof emailData.attachments === 'string' ? [emailData.attachments] : []
+    };
   };
 
-  const copyToClipboard = () => {
-    const emailText = `To: ${email.to.join(', ')}
-${email.cc && email.cc.length > 0 ? `CC: ${email.cc.join(', ')}\n` : ''}Subject: ${email.subject}
+  const normalizedEmail = normalizeEmailData(email);
 
-${email.body}`;
+
+  const copyToClipboard = () => {
+    const emailText = `To: ${normalizedEmail.to.join(', ')}
+${normalizedEmail.cc && normalizedEmail.cc.length > 0 ? `CC: ${normalizedEmail.cc.join(', ')}\n` : ''}Subject: ${normalizedEmail.subject}
+
+${normalizedEmail.body}`;
     
     navigator.clipboard.writeText(emailText).then(() => {
       setCopied(true);
@@ -31,7 +39,7 @@ ${email.body}`;
     alert('Email functionality would be integrated with your email service provider.');
   };
 
-  if (!email) {
+  if (!normalizedEmail) {
     return <div className="loading">Loading email draft...</div>;
   }
 
@@ -52,55 +60,29 @@ ${email.body}`;
           >
             Send Test Email
           </button>
-          <button 
-            onClick={() => setShowFeedback(!showFeedback)} 
-            className="btn btn-secondary"
-            disabled={loading}
-          >
-            {showFeedback ? 'Cancel' : 'Regenerate with Feedback'}
-          </button>
         </div>
       </div>
 
-      {showFeedback && (
-        <form onSubmit={handleRegenerateSubmit} className="feedback-form">
-          <textarea
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="Provide feedback on what should be changed or improved..."
-            rows={3}
-            className="feedback-input"
-            disabled={loading}
-          />
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            disabled={loading || !feedback.trim()}
-          >
-            {loading ? 'Regenerating...' : 'Apply Feedback'}
-          </button>
-        </form>
-      )}
 
       <div className="email-content">
-        <div className={`email-priority priority-${email.priority}`}>
-          Priority: {email.priority.toUpperCase()}
+        <div className={`email-priority priority-${normalizedEmail.priority || 'medium'}`}>
+          Priority: {(normalizedEmail.priority || 'medium').toUpperCase()}
         </div>
 
         <div className="email-field">
           <label>To:</label>
           <div className="recipient-list">
-            {email.to.map((recipient, index) => (
+            {normalizedEmail.to.map((recipient, index) => (
               <span key={index} className="recipient">{recipient}</span>
             ))}
           </div>
         </div>
 
-        {email.cc && email.cc.length > 0 && (
+        {normalizedEmail.cc && normalizedEmail.cc.length > 0 && (
           <div className="email-field">
             <label>CC:</label>
             <div className="recipient-list">
-              {email.cc.map((recipient, index) => (
+              {normalizedEmail.cc.map((recipient, index) => (
                 <span key={index} className="recipient">{recipient}</span>
               ))}
             </div>
@@ -109,21 +91,21 @@ ${email.body}`;
 
         <div className="email-field">
           <label>Subject:</label>
-          <div className="email-subject">{email.subject}</div>
+          <div className="email-subject">{normalizedEmail.subject || 'No subject'}</div>
         </div>
 
         <div className="email-field">
           <label>Body:</label>
           <div className="email-body">
-            <pre>{email.body}</pre>
+            <pre>{normalizedEmail.body || 'No content'}</pre>
           </div>
         </div>
 
-        {email.attachments && email.attachments.length > 0 && (
+        {normalizedEmail.attachments && normalizedEmail.attachments.length > 0 && (
           <div className="email-field">
             <label>Attachments:</label>
             <div className="attachment-list">
-              {email.attachments.map((attachment, index) => (
+              {normalizedEmail.attachments.map((attachment, index) => (
                 <span key={index} className="attachment">
                   📎 {attachment}
                 </span>

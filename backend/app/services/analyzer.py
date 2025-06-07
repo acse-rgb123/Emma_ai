@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 def extract_name_from_transcript(transcript):
     """Extract service user name from transcript"""
-    import re
     
     # Common patterns for names in transcripts
     patterns = [
@@ -31,7 +30,6 @@ def extract_name_from_transcript(transcript):
 
 def extract_location_from_transcript(transcript):
     """Extract location from transcript"""
-    import re
     
     # Common location patterns
     patterns = [

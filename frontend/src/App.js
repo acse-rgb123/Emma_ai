@@ -4,7 +4,7 @@ import ChatInterface from './components/ChatInterface';
 import IncidentReport from './components/IncidentReport';
 import EmailDraft from './components/EmailDraft';
 import ProviderSelector from './components/ProviderSelector';
-import { analyzeTranscript, regenerateComponent, updateAnalysis, checkHealth } from './services/api';
+import { analyzeTranscript, updateAnalysis, checkHealth } from './services/api';
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -84,45 +84,6 @@ function App() {
     }
   };
 
-  const handleRegenerate = async (component, feedback) => {
-    console.log(`Regenerating ${component} with feedback:`, feedback);
-    setLoading(true);
-    setError(null);
-    
-    try {
-      let original;
-      if (component === 'report') {
-        original = analysisResult.incident_report;
-      } else if (component === 'email') {
-        original = analysisResult.email_draft;
-      }
-      
-      if (!original) {
-        throw new Error('No original data to regenerate');
-      }
-      
-      const result = await regenerateComponent(component, original, feedback);
-      console.log('Regenerate result:', result);
-      
-      if (result && result.result) {
-        // Update the specific component
-        setAnalysisResult(prev => ({
-          ...prev,
-          [component === 'report' ? 'incident_report' : 'email_draft']: result.result
-        }));
-        
-        // Force re-render
-        setUpdateCounter(prev => prev + 1);
-      } else {
-        throw new Error('Regeneration failed - no result returned');
-      }
-    } catch (err) {
-      console.error('Regenerate error:', err);
-      setError(err.message || 'An error occurred while regenerating');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleReportUpdate = (updatedReport) => {
     console.log('Updating report with manual edits');
@@ -233,7 +194,6 @@ function App() {
           <IncidentReport 
             key={`report-${updateCounter}`}
             report={analysisResult.incident_report}
-            onRegenerate={(feedback) => handleRegenerate('report', feedback)}
             onUpdate={handleReportUpdate}
             loading={loading}
           />
@@ -254,7 +214,6 @@ function App() {
           <EmailDraft 
             key={`email-${updateCounter}`}
             email={analysisResult.email_draft}
-            onRegenerate={(feedback) => handleRegenerate('email', feedback)}
             loading={loading}
           />
         );

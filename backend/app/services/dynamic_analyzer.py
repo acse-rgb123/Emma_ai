@@ -1,5 +1,8 @@
 import json
 import logging
+from openai import OpenAI
+import google.generativeai as genai
+import anthropic
 from typing import Dict, Any
 from app.services.provider_manager import provider_manager
 
@@ -20,13 +23,10 @@ class DynamicAnalyzer:
             raise ValueError(f"No API key configured for {provider}")
         
         if provider == "openai":
-            from openai import OpenAI
             return OpenAI(api_key=api_key)
         elif provider == "claude":
-            import anthropic
             return anthropic.Client(api_key=api_key)
         elif provider == "gemini":
-            import google.generativeai as genai
             genai.configure(api_key=api_key)
             return genai.GenerativeModel(self.provider_manager.get_current_model())
         else:

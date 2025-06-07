@@ -41,7 +41,7 @@ class ProviderManager:
             },
             "gemini": {
                 "api_key": os.getenv("GEMINI_API_KEY"),
-                "model": "gemini-pro",
+                "model": "gemini-1.5-pro",
                 "available": bool(os.getenv("GEMINI_API_KEY"))
             }
         }

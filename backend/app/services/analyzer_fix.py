@@ -42,8 +42,6 @@ def extract_location_from_transcript(transcript):
 def extract_time_duration(transcript):
     """Extract time duration from transcript"""
     
-    import re
-    
     # Look for time patterns
     time_match = re.search(r'(\d+)\s*(?:minutes?|mins?|hours?|hrs?)', transcript, re.IGNORECASE)
     if time_match:

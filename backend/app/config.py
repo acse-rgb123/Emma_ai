@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     api_key: Optional[str] = os.getenv("API_KEY")
     
     # OpenAI specific
-    openai_model: str = "gpt-4"
+    openai_model: str = "gpt-4o-mini"
     openai_temperature: float = 0.7
     openai_max_tokens: int = 2000
     

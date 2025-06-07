@@ -1,9 +1,12 @@
+import re
+from datetime import datetime
+from typing import Dict, Any
+
+from .analyzer_fix import extract_name_from_transcript, extract_location_from_transcript
+
     def _fallback_generate(self, transcript: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Generate report using rule-based approach"""
         logger.info("Using fallback report generation")
-        
-        # Import extraction functions
-        from .analyzer_fix import extract_name_from_transcript, extract_location_from_transcript
         
         # Extract information from transcript
         service_user_name = extract_name_from_transcript(transcript) or "Unknown"
@@ -18,7 +21,6 @@
                 incident_types.append("Mental Health Concern")
         
         # Extract time if mentioned
-        import re
         time_match = re.search(r'(\d+)\s*(?:minutes?|mins?|hours?)', transcript, re.IGNORECASE)
         time_on_floor = time_match.group(0) if time_match else "Unknown duration"
         
@@ -47,7 +49,6 @@
         # Extract key facts
         if "fallen" in transcript.lower() or "fall" in transcript.lower():
             # Find context around fall
-            import re
             fall_context = re.search(r'([^.]*(?:fallen|fall)[^.]*)', transcript, re.IGNORECASE)
             if fall_context:
                 description_parts.append(fall_context.group(1).strip())
