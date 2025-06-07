@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import OpenAILogo from './logos/OpenAILogo';
-import ClaudeLogo from './logos/ClaudeLogo';
-import GeminiLogo from './logos/GeminiLogo';
 
 // Simple encryption/decryption for API keys (not production-grade, but better than plaintext)
 const encryptKey = (key) => {
@@ -20,15 +18,11 @@ const decryptKey = (encrypted) => {
 
 function SettingsModal({ isOpen, onClose, onSave }) {
   const [apiKeys, setApiKeys] = useState({
-    openai: '',
-    claude: '',
-    gemini: ''
+    openai: ''
   });
   
   const [showKeys, setShowKeys] = useState({
-    openai: false,
-    claude: false,
-    gemini: false
+    openai: false
   });
 
   const [savedStatus, setSavedStatus] = useState('');
@@ -37,9 +31,7 @@ function SettingsModal({ isOpen, onClose, onSave }) {
     if (isOpen) {
       // Load saved keys from localStorage
       const savedKeys = {
-        openai: decryptKey(localStorage.getItem('emma_openai_key') || ''),
-        claude: decryptKey(localStorage.getItem('emma_claude_key') || ''),
-        gemini: decryptKey(localStorage.getItem('emma_gemini_key') || '')
+        openai: decryptKey(localStorage.getItem('emma_openai_key') || '')
       };
       setApiKeys(savedKeys);
     }
@@ -48,18 +40,14 @@ function SettingsModal({ isOpen, onClose, onSave }) {
   const handleSave = async () => {
     // Encrypt and save to localStorage
     if (apiKeys.openai) localStorage.setItem('emma_openai_key', encryptKey(apiKeys.openai));
-    if (apiKeys.claude) localStorage.setItem('emma_claude_key', encryptKey(apiKeys.claude));
-    if (apiKeys.gemini) localStorage.setItem('emma_gemini_key', encryptKey(apiKeys.gemini));
     
-    // Send to backend (in a real app, this would be done securely)
+    // Send to backend
     try {
       const response = await fetch('/api/update_keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          openai_key: apiKeys.openai,
-          claude_key: apiKeys.claude,
-          gemini_key: apiKeys.gemini
+          openai_key: apiKeys.openai
         })
       });
       
@@ -92,20 +80,6 @@ function SettingsModal({ isOpen, onClose, onSave }) {
       logo: OpenAILogo,
       placeholder: 'sk-...',
       description: 'GPT-4 and GPT-3.5 models'
-    },
-    { 
-      id: 'claude', 
-      name: 'Claude', 
-      logo: ClaudeLogo,
-      placeholder: 'sk-ant-...',
-      description: 'Anthropic Claude models'
-    },
-    { 
-      id: 'gemini', 
-      name: 'Google Gemini', 
-      logo: GeminiLogo,
-      placeholder: 'AIza...',
-      description: 'Google Gemini Pro models'
     }
   ];
 
@@ -113,16 +87,16 @@ function SettingsModal({ isOpen, onClose, onSave }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>API Configuration</h2>
+          <h2>OpenAI API Configuration</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <div className="modal-body">
           <div className="settings-intro">
-            <p>Configure your AI provider API keys. Keys are stored locally in your browser and encrypted.</p>
+            <p>Configure your OpenAI API key. Your key is stored locally in your browser and encrypted.</p>
             <div className="security-note">
               <span className="security-icon">🔒</span>
-              <span>Your API keys never leave your device and are not stored on our servers.</span>
+              <span>Your API key never leaves your device and is not stored on our servers.</span>
             </div>
           </div>
           

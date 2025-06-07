@@ -7,7 +7,6 @@ from typing import Dict, Any, List, Optional
 
 # Local application imports
 from app.config import settings
-from app.services.provider_manager import provider_manager
 
 # AI Provider imports
 try:
@@ -15,52 +14,19 @@ try:
 except ImportError:
     OpenAI = None
 
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-
 logger = logging.getLogger(__name__)
 
 class LLMAnalyzer:
     """Analyzer that primarily uses LLM for all extraction"""
     
     def __init__(self):
-        self.setup_ai_client()
+        if not OpenAI:
+            raise ImportError("OpenAI package is required but not installed")
+        if not settings.openai_api_key:
+            raise ValueError("OpenAI API key is required but not provided")
+        
+        self.client = OpenAI(api_key=settings.openai_api_key)
         self.policies = self._load_policies()
-        
-    def setup_ai_client(self):
-        """Setup AI client based on configured provider"""
-        self.provider = provider_manager.get_current_provider()
-        self.api_key = provider_manager.get_current_api_key()
-        
-        if not self.api_key:
-            logger.warning(f"No API key found for {self.provider}, will use rule-based fallback")
-            self.client = None
-            return
-            
-        try:
-            if self.provider == "openai" and OpenAI:
-                self.client = OpenAI(api_key=self.api_key)
-                self.model = provider_manager.get_current_model()
-            elif self.provider == "claude" and anthropic:
-                self.client = anthropic.Client(api_key=self.api_key)
-                self.model = provider_manager.get_current_model()
-            elif self.provider == "gemini" and genai:
-                genai.configure(api_key=self.api_key)
-                self.client = genai.GenerativeModel(provider_manager.get_current_model())
-                self.model = provider_manager.get_current_model()
-            else:
-                logger.error(f"Unknown provider: {self.provider}")
-                self.client = None
-        except Exception as e:
-            logger.error(f"Failed to setup AI client: {e}")
-            self.client = None
     
     def _load_policies(self) -> str:
         """Load policies from file"""
@@ -84,30 +50,29 @@ class LLMAnalyzer:
         """
     
     async def analyze(self, transcript: str) -> Dict[str, Any]:
-        """Analyze transcript - LLM first, fallback to rules only if needed"""
-        logger.info(f"Starting analysis with {self.provider}")
+        """Analyze transcript using OpenAI - fallback to rules only if needed"""
+        logger.info("Starting analysis with OpenAI")
         
-        # Try LLM analysis first
-        if self.client:
-            try:
-                result = await self._llm_analysis(transcript)
-                if result and self._validate_llm_result(result):
-                    logger.info("LLM analysis successful")
+        # Try OpenAI analysis first
+        try:
+            result = await self._openai_analysis(transcript)
+            if result and self._validate_result(result):
+                logger.info("OpenAI analysis successful")
+                return result
+            else:
+                logger.warning("OpenAI result invalid, trying again with structured prompt")
+                result = await self._openai_structured_analysis(transcript)
+                if result and self._validate_result(result):
                     return result
-                else:
-                    logger.warning("LLM result invalid, trying again with structured prompt")
-                    result = await self._llm_structured_analysis(transcript)
-                    if result and self._validate_llm_result(result):
-                        return result
-            except Exception as e:
-                logger.error(f"LLM analysis failed: {e}")
+        except Exception as e:
+            logger.error(f"OpenAI analysis failed: {e}")
         
-        # Only use fallback if LLM completely fails
+        # Only use fallback if OpenAI completely fails
         logger.warning("Using rule-based fallback analysis")
         return self._rule_based_analysis(transcript)
     
-    async def _llm_analysis(self, transcript: str) -> Optional[Dict[str, Any]]:
-        """Primary LLM analysis with comprehensive extraction"""
+    async def _openai_analysis(self, transcript: str) -> Optional[Dict[str, Any]]:
+        """Primary OpenAI analysis with comprehensive extraction"""
         prompt = f"""
         Analyze this social care call transcript and extract ALL information.
         
@@ -153,43 +118,24 @@ class LLMAnalyzer:
         """
         
         try:
-            if self.provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are an expert social care analyst. Extract all relevant information from transcripts."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.3  # Lower temperature for more consistent extraction
-                )
-                return json.loads(response.choices[0].message.content)
-                
-            elif self.provider == "claude":
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=2000,
-                    temperature=0.3,
-                    system="You are an expert social care analyst. Always return valid JSON.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return json.loads(response.content[0].text)
-                
-            elif self.provider == "gemini":
-                response = self.client.generate_content(prompt + "\n\nReturn ONLY valid JSON, no markdown.")
-                json_str = response.text.strip()
-                if json_str.startswith("```"):
-                    json_str = json_str.split("```")[1]
-                    if json_str.startswith("json"):
-                        json_str = json_str[4:]
-                return json.loads(json_str.strip())
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
+                messages=[
+                    {"role": "system", "content": "You are an expert social care analyst. Extract all relevant information from transcripts."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3  # Lower temperature for more consistent extraction
+            )
+            return json.loads(response.choices[0].message.content)
                 
         except Exception as e:
-            logger.error(f"LLM analysis error: {e}")
+            logger.error(f"OpenAI analysis error: {e}")
             return None
     
-    async def _llm_structured_analysis(self, transcript: str) -> Optional[Dict[str, Any]]:
-        """Structured LLM analysis with step-by-step extraction"""
+    async def _openai_structured_analysis(self, transcript: str) -> Optional[Dict[str, Any]]:
+        """Structured OpenAI analysis with step-by-step extraction"""
         prompt = f"""
         Step 1: Find the service user's name in this transcript:
         {transcript}
@@ -209,10 +155,10 @@ class LLMAnalyzer:
         Return a complete JSON analysis following the structure provided.
         """
         
-        return await self._llm_analysis(transcript)
+        return await self._openai_analysis(transcript)
     
-    def _validate_llm_result(self, result: Dict[str, Any]) -> bool:
-        """Validate that LLM returned proper structure with actual data"""
+    def _validate_result(self, result: Dict[str, Any]) -> bool:
+        """Validate that OpenAI returned proper structure with actual data"""
         required_fields = ["service_user_name", "location", "summary", "violations"]
         
         # Check required fields exist
@@ -230,7 +176,7 @@ class LLMAnalyzer:
         return True
     
     def _rule_based_analysis(self, transcript: str) -> Dict[str, Any]:
-        """Rule-based fallback - only used when LLM completely fails"""
+        """Rule-based fallback - only used when OpenAI completely fails"""
         logger.info("Using rule-based fallback analysis")
         
         # Import the rule-based extraction functions
@@ -252,8 +198,8 @@ class LLMAnalyzer:
             "risk_assessments": [],
             "recommendations": ["Manual review recommended due to analysis failure"],
             "extracted_facts": {
-                "llm_used": False,
-                "fallback_reason": "LLM analysis failed"
+                "openai_used": False,
+                "fallback_reason": "OpenAI analysis failed"
             }
         }
         

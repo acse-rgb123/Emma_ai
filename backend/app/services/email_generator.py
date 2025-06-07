@@ -12,35 +12,16 @@ try:
 except ImportError:
     OpenAI = None
 
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-
 logger = logging.getLogger(__name__)
 
 class EmailGenerator:
     def __init__(self):
-        self.ai_provider = settings.ai_provider
-        self.api_key = settings.api_key
-        self._setup_ai_client()
-    
-    def _setup_ai_client(self):
-        """Setup AI client based on provider"""
-        if self.ai_provider == "openai" and OpenAI:
-            self.client = OpenAI(api_key=self.api_key)
-        elif self.ai_provider == "claude" and anthropic:
-            self.client = anthropic.Client(api_key=self.api_key)
-        elif self.ai_provider == "gemini" and genai:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(settings.gemini_model)
-        else:
-            raise ImportError(f"AI provider {self.ai_provider} not available or not installed")
+        if not OpenAI:
+            raise ImportError("OpenAI package is required but not installed")
+        if not settings.openai_api_key:
+            raise ValueError("OpenAI API key is required but not provided")
+        
+        self.client = OpenAI(api_key=settings.openai_api_key)
         
     async def generate_email(self, incident_report: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Generate email draft based on incident report and analysis"""
@@ -54,7 +35,7 @@ class EmailGenerator:
             return self._fallback_generate(incident_report, analysis)
     
     async def _ai_generate(self, incident_report: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Use AI to generate email"""
+        """Use OpenAI to generate email"""
         try:
             prompt = f"""
             Generate a professional email to notify relevant parties about this incident.
@@ -75,42 +56,20 @@ class EmailGenerator:
             Return as JSON with keys: to, cc, subject, body, priority
             """
             
-            if self.ai_provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": "You are a social care coordinator drafting incident notification emails. Be clear, professional, and action-oriented."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                return json.loads(response.choices[0].message.content)
-            
-            elif self.ai_provider == "claude":
-                response = self.client.messages.create(
-                    model=settings.claude_model,
-                    max_tokens=settings.claude_max_tokens,
-                    system="You are a social care coordinator drafting incident notification emails. Be clear, professional, and action-oriented. Return valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return json.loads(response.content[0].text)
-            
-            elif self.ai_provider == "gemini":
-                prompt = f"""You are a social care coordinator drafting incident notification emails.
-                {prompt}
-                
-                Return only valid JSON, no additional text or markdown.
-                """
-                response = self.client.generate_content(prompt)
-                json_str = response.text.strip()
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                return json.loads(json_str.strip())
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
+                temperature=0.3,
+                messages=[
+                    {"role": "system", "content": "You are a social care coordinator drafting incident notification emails. Be clear, professional, and action-oriented."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
             
         except Exception as e:
-            logger.error(f"AI email generation failed: {e}")
+            logger.error(f"OpenAI email generation failed: {e}")
             return None
     
     def _fallback_generate(self, incident_report: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -219,7 +178,7 @@ class EmailGenerator:
             return datetime_str or "Unknown time"
     
     async def regenerate_with_feedback(self, original: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        """Regenerate email with user feedback"""
+        """Regenerate email with user feedback using OpenAI"""
         try:
             prompt = f"""
             Original email:
@@ -232,40 +191,18 @@ class EmailGenerator:
             Maintain professionalism and all required information.
             """
             
-            if self.ai_provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": "Update the email based on user feedback while maintaining professional standards."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                return json.loads(response.choices[0].message.content)
-            
-            elif self.ai_provider == "claude":
-                response = self.client.messages.create(
-                    model=settings.claude_model,
-                    max_tokens=settings.claude_max_tokens,
-                    system="Update the email based on user feedback while maintaining professional standards. Return valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return json.loads(response.content[0].text)
-            
-            elif self.ai_provider == "gemini":
-                prompt = f"""Update the email based on user feedback while maintaining professional standards.
-                {prompt}
-                
-                Return only valid JSON, no additional text or markdown.
-                """
-                response = self.client.generate_content(prompt)
-                json_str = response.text.strip()
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                return json.loads(json_str.strip())
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
+                temperature=0.3,
+                messages=[
+                    {"role": "system", "content": "Update the email based on user feedback while maintaining professional standards."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
             
         except Exception as e:
-            logger.error(f"Error regenerating email: {e}")
+            logger.error(f"Error regenerating email with OpenAI: {e}")
             return original

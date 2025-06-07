@@ -18,6 +18,9 @@ from app.services.email_updater import EmailUpdater
 from app.services.report_generator import ReportGenerator
 from app.services.report_updater import ReportUpdater
 
+# OpenAI import
+from openai import OpenAI
+
 # Configure detailed logging
 logging.basicConfig(
     level=logging.INFO,
@@ -282,59 +285,157 @@ async def regenerate_component(component: str, request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Error regenerating {component}: {str(e)}")
 
 
+@app.post("/api/test_openai")
+async def test_openai_connection(request: Dict[str, Any]):
+    """Test OpenAI API connection"""
+    try:
+        api_key = request.get("api_key")
+        if not api_key:
+            return {
+                "success": False,
+                "error": "API key is required"
+            }
+        
+        if not api_key.startswith("sk-"):
+            return {
+                "success": False,
+                "error": "Invalid API key format. OpenAI API keys start with 'sk-'"
+            }
+        
+        # Test the API key with a simple request
+        client = OpenAI(api_key=api_key)
+        
+        # Make a minimal test request with timeout
+        logger.info("Testing OpenAI API connection...")
+        
+        # Try different approach for testing
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Test"}],
+                max_tokens=5,
+                timeout=10.0  # 10 second timeout
+            )
+        except Exception as chat_error:
+            logger.warning(f"Chat completion failed, trying models list: {chat_error}")
+            # Fallback: try listing models (simpler API call)
+            try:
+                models = client.models.list()
+                logger.info("Models list successful - API key is valid")
+                return {
+                    "success": True,
+                    "message": "Connection successful (verified via models list)",
+                    "model": "gpt-4o-mini"
+                }
+            except Exception as models_error:
+                logger.error(f"Both tests failed - chat: {chat_error}, models: {models_error}")
+                raise chat_error  # Raise original error
+        
+        logger.info("OpenAI connection test successful")
+        return {
+            "success": True,
+            "message": "Connection successful",
+            "model": "gpt-4o-mini",
+            "usage": response.usage.total_tokens if response.usage else 0
+        }
+        
+    except ImportError:
+        logger.error("OpenAI package not installed")
+        return {
+            "success": False,
+            "error": "OpenAI package is not installed. Please install it with: pip install openai"
+        }
+    except Exception as e:
+        error_str = str(e)
+        logger.error(f"OpenAI connection test failed: {error_str}")
+        
+        # Handle common error types
+        if "401" in error_str or "Unauthorized" in error_str:
+            return {
+                "success": False,
+                "error": "Invalid API key. Please check your OpenAI API key."
+            }
+        elif "403" in error_str or "Forbidden" in error_str:
+            return {
+                "success": False,
+                "error": "API key doesn't have permission. Please check your OpenAI account."
+            }
+        elif "429" in error_str or "rate_limit" in error_str.lower():
+            return {
+                "success": False,
+                "error": "Rate limit exceeded. Please try again later."
+            }
+        elif "timeout" in error_str.lower() or "connection" in error_str.lower():
+            return {
+                "success": False,
+                "error": "Connection timeout. Please check your internet connection and try again."
+            }
+        elif "proxy" in error_str.lower():
+            return {
+                "success": False,
+                "error": "Proxy error. Please check your network configuration."
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Connection failed: {error_str}"
+            }
+
 @app.post("/api/update_keys")
 async def update_api_keys(request: Dict[str, Any]):
-    """Update API keys from frontend configuration"""
+    """Update OpenAI API key"""
     try:
-        # Update environment variables
-        if request.get("openai_key"):
-            os.environ["OPENAI_API_KEY"] = request["openai_key"]
-        if request.get("claude_key"):
-            os.environ["CLAUDE_API_KEY"] = request["claude_key"]
-        if request.get("gemini_key"):
-            os.environ["GEMINI_API_KEY"] = request["gemini_key"]
+        openai_key = request.get("openai_key")
+        if not openai_key:
+            raise ValueError("OpenAI API key is required")
         
-        # Update multi_settings if available
-        try:
-            from app.multi_provider_config import multi_settings
-            multi_settings.openai_api_key = request.get("openai_key")
-            multi_settings.claude_api_key = request.get("claude_key")
-            multi_settings.gemini_api_key = request.get("gemini_key")
-        except ImportError:
-            pass
+        # Update environment variable
+        os.environ["OPENAI_API_KEY"] = openai_key
+        
+        # Update settings
+        from app.config import settings
+        settings.openai_api_key = openai_key
         
         # Reinitialize services
         global policy_analyzer, report_generator, email_generator, report_updater, email_updater
-        policy_analyzer = PolicyAnalyzer()
-        report_generator = ReportGenerator()
-        email_generator = EmailGenerator()
-        report_updater = ReportUpdater()
-        email_updater = EmailUpdater()
+        try:
+            policy_analyzer = PolicyAnalyzer()
+            report_generator = ReportGenerator()
+            email_generator = EmailGenerator()
+            report_updater = ReportUpdater()
+            email_updater = EmailUpdater()
+        except Exception as e:
+            logger.error(f"Error reinitializing services: {str(e)}")
+            raise ValueError(f"Failed to initialize services with new API key: {str(e)}")
         
         return {
-            "status": "success",
-            "message": "API keys updated successfully"
+            "success": True,
+            "message": "OpenAI API key updated successfully"
         }
         
     except Exception as e:
-        logger.error(f"Error updating API keys: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error updating API key: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 @app.get("/health")
 async def health_check():
-    ai_configured = bool(os.getenv("API_KEY"))
+    openai_configured = bool(os.getenv("OPENAI_API_KEY"))
     return {
         "status": "healthy",
-        "ai_provider": os.getenv("AI_PROVIDER", "openai"),
-        "ai_configured": ai_configured,
+        "ai_provider": "openai",
+        "ai_configured": openai_configured,
         "services": {
-            "analyzer": "active",
-            "report_generator": "active",
-            "email_generator": "active"
+            "analyzer": "active" if openai_configured else "not_configured",
+            "report_generator": "active" if openai_configured else "not_configured",
+            "email_generator": "active" if openai_configured else "not_configured"
         },
         "debug_info": {
             "active_sessions": len(conversation_contexts),
-            "ai_key_length": len(os.getenv("API_KEY", "")) if ai_configured else 0
+            "openai_key_configured": openai_configured,
+            "openai_key_length": len(os.getenv("OPENAI_API_KEY", "")) if openai_configured else 0
         }
     }
 

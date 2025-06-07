@@ -3,10 +3,13 @@ import re
 import json
 import logging
 from typing import Dict, Any, List
-import anthropic
 from pathlib import Path
 from app.config import settings
-from .analyzer_fix import extract_name_from_transcript, extract_location_from_transcript
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,12 @@ def extract_location_from_transcript(transcript):
 
 class PolicyAnalyzer:
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=settings.api_key)
+        if not OpenAI:
+            raise ImportError("OpenAI package is required but not installed")
+        if not settings.openai_api_key:
+            raise ValueError("OpenAI API key is required but not provided")
+        
+        self.client = OpenAI(api_key=settings.openai_api_key)
         self.policies = self._load_policies()
         
     def _load_policies(self) -> str:
@@ -75,23 +83,23 @@ class PolicyAnalyzer:
         """
     
     async def analyze(self, transcript: str) -> Dict[str, Any]:
-        """Analyze transcript against policies using Claude"""
+        """Analyze transcript against policies using OpenAI GPT"""
         try:
-            analysis = await self._claude_analysis(transcript)
+            analysis = await self._openai_analysis(transcript)
             
             # Validate the response
             if analysis and isinstance(analysis, dict):
                 return analysis
             else:
-                logger.warning("Invalid Claude response, using fallback")
+                logger.warning("Invalid GPT response, using fallback")
                 return self._fallback_analysis(transcript)
                 
         except Exception as e:
             logger.error(f"Error in analysis: {e}")
             return self._fallback_analysis(transcript)
     
-    async def _claude_analysis(self, transcript: str) -> Dict[str, Any]:
-        """Use Claude to analyze transcript"""
+    async def _openai_analysis(self, transcript: str) -> Dict[str, Any]:
+        """Use OpenAI GPT to analyze transcript"""
         try:
             prompt = f"""You are a social care compliance analyst. Analyze the following call transcript against the provided policies.
 
@@ -141,15 +149,18 @@ Return your analysis as a JSON object with this exact structure:
 
 Respond ONLY with the JSON object, no additional text."""
             
-            response = self.client.messages.create(
-                model=settings.claude_model,
-                max_tokens=settings.claude_max_tokens,
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
                 temperature=0.3,  # Lower temperature for more consistent analysis
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": "You are a social care compliance analyst. Analyze call transcripts against policies and return JSON responses only."},
+                    {"role": "user", "content": prompt}
+                ]
             )
             
-            # Extract JSON from Claude's response
-            json_str = response.content[0].text.strip()
+            # Extract JSON from OpenAI's response
+            json_str = response.choices[0].message.content.strip()
             
             # Clean up if wrapped in markdown
             if json_str.startswith("```json"):
@@ -168,10 +179,10 @@ Respond ONLY with the JSON object, no additional text."""
             return analysis
             
         except json.JSONDecodeError as e:
-            logger.error(f"Claude returned invalid JSON: {e}")
+            logger.error(f"OpenAI returned invalid JSON: {e}")
             return None
         except Exception as e:
-            logger.error(f"Claude analysis failed: {e}")
+            logger.error(f"OpenAI analysis failed: {e}")
             return None
     
     def _fallback_analysis(self, transcript: str) -> Dict[str, Any]:

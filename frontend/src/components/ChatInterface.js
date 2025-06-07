@@ -114,14 +114,28 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
       {!hasAnalysis && (
         <form onSubmit={handleSubmit} className="input-form">
           <div className="form-group">
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Paste or type the call transcript here..."
-              className="transcript-input"
-              rows={6}
-              disabled={loading}
-            />
+            <div className="input-container">
+              <textarea
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                placeholder="Paste or type the call transcript here..."
+                className={`transcript-input ${loading ? 'loading' : ''}`}
+                rows={6}
+                disabled={loading}
+              />
+              {loading && (
+                <div className="loading-overlay">
+                  <div className="loading-content">
+                    <div className="loading-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <p>Analyzing transcript against policies...</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="form-actions">
@@ -179,14 +193,28 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
             <form onSubmit={handleNewTranscriptSubmit} className="expandable-form">
               <div className="form-group">
                 <label>Enter New Transcript:</label>
-                <textarea
-                  value={newTranscript}
-                  onChange={(e) => setNewTranscript(e.target.value)}
-                  placeholder="Paste or type a new call transcript here..."
-                  className="transcript-input"
-                  rows={6}
-                  disabled={loading}
-                />
+                <div className="input-container">
+                  <textarea
+                    value={newTranscript}
+                    onChange={(e) => setNewTranscript(e.target.value)}
+                    placeholder="Paste or type a new call transcript here..."
+                    className={`transcript-input ${loading ? 'loading' : ''}`}
+                    rows={6}
+                    disabled={loading}
+                  />
+                  {loading && (
+                    <div className="loading-overlay">
+                      <div className="loading-content">
+                        <div className="loading-dots">
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </div>
+                        <p>Analyzing new transcript...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="form-actions">
                 <button
@@ -205,14 +233,28 @@ function ChatInterface({ onSubmit, onUpdate, loading, error, hasAnalysis, sessio
             <form onSubmit={handleUpdateTranscriptSubmit} className="expandable-form">
               <div className="form-group">
                 <label>Additional Transcript Information:</label>
-                <textarea
-                  value={updateTranscript}
-                  onChange={(e) => setUpdateTranscript(e.target.value)}
-                  placeholder="Provide additional transcript content or corrections..."
-                  className="transcript-input"
-                  rows={4}
-                  disabled={loading}
-                />
+                <div className="input-container">
+                  <textarea
+                    value={updateTranscript}
+                    onChange={(e) => setUpdateTranscript(e.target.value)}
+                    placeholder="Provide additional transcript content or corrections..."
+                    className={`transcript-input ${loading ? 'loading' : ''}`}
+                    rows={4}
+                    disabled={loading}
+                  />
+                  {loading && (
+                    <div className="loading-overlay">
+                      <div className="loading-content">
+                        <div className="loading-dots">
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </div>
+                        <p>Updating with additional transcript...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="form-actions">
                 <button

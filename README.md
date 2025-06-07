@@ -4,7 +4,7 @@ An AI-Enhanced Incident Response System for Social Care that analyzes call trans
 
 ## Features
 
-- **Multi-AI Provider Support**: Seamlessly switch between OpenAI (GPT-4), Anthropic Claude, and Google Gemini
+- **OpenAI Integration**: Powered by OpenAI's GPT-4 for accurate incident analysis
 - **Transcript Analysis**: Analyzes social care call transcripts against organizational policies
 - **Policy Violation Detection**: Identifies policy violations and required actions
 - **Incident Report Generation**: Automatically generates detailed incident reports
@@ -18,32 +18,52 @@ An AI-Enhanced Incident Response System for Social Care that analyzes call trans
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- At least one AI provider API key (OpenAI, Claude, or Gemini)
+- **No prerequisites needed** - the setup script installs everything
+- **Required**: OpenAI API key from https://platform.openai.com/api-keys
 
 ### Installation
 
-1. Clone the repository:
+Simple one-command setup for local development:
+
 ```bash
 git clone https://github.com/yourusername/emma-incident-response.git
 cd emma-incident-response
+./setup.sh --api-key YOUR_OPENAI_API_KEY
 ```
 
-2. Run the setup script:
+This will:
+- Install Node.js and Python if needed (macOS/Linux)
+- Set up Python virtual environment
+- Install all dependencies
+- Configure your OpenAI API key
+- Create the run script
+
+Then start the system:
 ```bash
-chmod +x setup.sh
-./setup.sh
+./run_local.sh
 ```
 
-3. Start the application:
+### Access Points
+
+After setup, access your application at:
+- 🌐 **Frontend**: http://localhost:3000
+- 🔗 **Backend API**: http://localhost:8000  
+- 📚 **API Documentation**: http://localhost:8000/docs
+
+### Setup Script Options
+
 ```bash
-docker-compose up -d
-```
+./setup.sh [OPTIONS]
 
-4. Access the application at:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+Options:
+  -k, --api-key KEY     OpenAI API key (required)
+  --skip-deps           Skip dependency installation
+  -h, --help            Show help message
+
+Examples:
+  ./setup.sh -k sk-your-openai-api-key
+  ./setup.sh --api-key sk-your-api-key --skip-deps
+```
 
 ## Configuration
 
@@ -66,6 +86,10 @@ Click on the provider logo in the top-right corner to:
 - Switch between configured providers
 - View available providers
 - Access API key configuration
+
+### Management
+
+- **`./run_local.sh`**: Start the system in local development mode (created by setup.sh)
 
 ## Usage
 
@@ -91,25 +115,24 @@ emma-incident-response/
 │   │   ├── components/    # React components
 │   │   └── services/      # API services
 │   └── package.json
-└── docker-compose.yml
+├── setup.sh               # Setup script
+└── run_local.sh           # Start script (created by setup)
 ```
 
 ## Development
 
-### Backend Development
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+The setup script creates a complete local development environment. After running setup:
 
-### Frontend Development
 ```bash
-cd frontend
-npm install
-npm start
+# Start both frontend and backend
+./run_local.sh
+
+# Or start them separately:
+# Backend only:
+cd backend && source venv/bin/activate && uvicorn app.main:app --reload
+
+# Frontend only (in separate terminal):
+cd frontend && npm start
 ```
 
 ## Security

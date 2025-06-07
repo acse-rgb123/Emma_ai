@@ -11,35 +11,16 @@ try:
 except ImportError:
     OpenAI = None
 
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-
 logger = logging.getLogger(__name__)
 
 class ReportUpdater:
     def __init__(self):
-        self.ai_provider = settings.ai_provider
-        self.api_key = settings.api_key
-        self._setup_ai_client()
-    
-    def _setup_ai_client(self):
-        """Setup AI client based on provider"""
-        if self.ai_provider == "openai" and OpenAI:
-            self.client = OpenAI(api_key=self.api_key)
-        elif self.ai_provider == "claude" and anthropic:
-            self.client = anthropic.Client(api_key=self.api_key)
-        elif self.ai_provider == "gemini" and genai:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(settings.gemini_model)
-        else:
-            raise ImportError(f"AI provider {self.ai_provider} not available or not installed")
+        if not OpenAI:
+            raise ImportError("OpenAI package is required but not installed")
+        if not settings.openai_api_key:
+            raise ValueError("OpenAI API key is required but not provided")
+        
+        self.client = OpenAI(api_key=settings.openai_api_key)
     
     async def update_report(self, original_report: Dict[str, Any], update_info: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Update incident report with new information using LLM"""
@@ -98,86 +79,50 @@ ANALYZE THE INPUT "{update_info}" AND UPDATE THE RELEVANT FIELDS:
 Return the complete updated incident report as a JSON object:
 """
 
-            if self.ai_provider == "openai":
-                # Add explicit JSON instruction to prompt for models that don't support response_format
-                json_prompt = prompt + "\n\nIMPORTANT: Return ONLY a valid JSON object, no additional text or markdown formatting."
-                
-                try:
+            # Add explicit JSON instruction to prompt for models that don't support response_format
+            json_prompt = prompt + "\n\nIMPORTANT: Return ONLY a valid JSON object, no additional text or markdown formatting."
+            
+            try:
+                response = self.client.chat.completions.create(
+                    model=settings.openai_model,
+                    max_tokens=settings.openai_max_tokens,
+                    messages=[
+                        {
+                            "role": "system", 
+                            "content": "You are a social care incident report specialist. Update incident reports accurately and professionally based on new information. Always return valid JSON."
+                        },
+                        {"role": "user", "content": json_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.3
+                )
+            except Exception as e:
+                if "response_format" in str(e):
+                    # Fallback for models that don't support response_format
                     response = self.client.chat.completions.create(
                         model=settings.openai_model,
+                        max_tokens=settings.openai_max_tokens,
                         messages=[
                             {
                                 "role": "system", 
-                                "content": "You are a social care incident report specialist. Update incident reports accurately and professionally based on new information. Always return valid JSON."
+                                "content": "You are a social care incident report specialist. Update incident reports accurately and professionally based on new information. Always return valid JSON only, no additional text."
                             },
                             {"role": "user", "content": json_prompt}
                         ],
-                        response_format={"type": "json_object"},
                         temperature=0.3
                     )
-                except Exception as e:
-                    if "response_format" in str(e):
-                        # Fallback for models that don't support response_format
-                        response = self.client.chat.completions.create(
-                            model=settings.openai_model,
-                            messages=[
-                                {
-                                    "role": "system", 
-                                    "content": "You are a social care incident report specialist. Update incident reports accurately and professionally based on new information. Always return valid JSON only, no additional text."
-                                },
-                                {"role": "user", "content": json_prompt}
-                            ],
-                            temperature=0.3
-                        )
-                    else:
-                        raise e
-                
-                # Extract JSON from response
-                json_str = response.choices[0].message.content.strip()
-                logger.debug(f"Raw LLM response for report update: {json_str[:500]}...")
-                
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                updated_report = json.loads(json_str.strip())
+                else:
+                    raise e
             
-            elif self.ai_provider == "claude":
-                system_msg = """You are a social care incident report specialist. You must update incident reports by analyzing user input and mapping it to specific JSON fields. Always return the complete JSON with all original fields. Focus on identifying which fields need updating based on the user's specific input."""
-                
-                response = self.client.messages.create(
-                    model=settings.claude_model,
-                    max_tokens=settings.claude_max_tokens,
-                    temperature=0.3,
-                    system=system_msg,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                # Extract JSON from response
-                json_str = response.content[0].text.strip()
-                logger.debug(f"Raw Claude response for report update: {json_str[:500]}...")
-                
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                updated_report = json.loads(json_str.strip())
+            # Extract JSON from response
+            json_str = response.choices[0].message.content.strip()
+            logger.debug(f"Raw OpenAI response for report update: {json_str[:500]}...")
             
-            elif self.ai_provider == "gemini":
-                full_prompt = f"""You are a social care incident report specialist.
-                {prompt}
-                
-                Return only valid JSON, no additional text or markdown formatting.
-                """
-                response = self.client.generate_content(full_prompt)
-                json_str = response.text.strip()
-                logger.debug(f"Raw Gemini response for report update: {json_str[:500]}...")
-                
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                updated_report = json.loads(json_str.strip())
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+            updated_report = json.loads(json_str.strip())
             
             # Validate that all original fields are present
             missing_fields = []
@@ -187,11 +132,11 @@ Return the complete updated incident report as a JSON object:
                     missing_fields.append(field)
             
             if missing_fields:
-                logger.warning(f"LLM response missing fields {missing_fields}, restored from original")
+                logger.warning(f"OpenAI response missing fields {missing_fields}, restored from original")
             
             # Validate structure integrity
             if not isinstance(updated_report, dict):
-                logger.error("LLM returned non-dict response")
+                logger.error("OpenAI returned non-dict response")
                 return original_report
                 
             # Detailed change detection and logging
@@ -205,26 +150,26 @@ Return the complete updated incident report as a JSON object:
                     }
             
             if changed_fields:
-                logger.info(f"Report updated successfully using LLM. Changes detected:")
+                logger.info(f"Report updated successfully using OpenAI. Changes detected:")
                 for field, changes in changed_fields.items():
                     logger.info(f"  - {field}: '{changes['original']}' → '{changes['updated']}'")
             else:
                 logger.warning(f"No changes detected in updated report. User input was: '{update_info}'")
-                logger.warning("This might indicate the LLM didn't understand which fields to update")
+                logger.warning("This might indicate OpenAI didn't understand which fields to update")
                 
             return updated_report
             
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON returned from LLM: {e}")
+            logger.error(f"Invalid JSON returned from OpenAI: {e}")
             logger.info("Falling back to original report")
             return original_report
         except Exception as e:
-            logger.error(f"Error updating report with LLM: {e}")
+            logger.error(f"Error updating report with OpenAI: {e}")
             logger.info("Falling back to original report")
             return original_report
     
     def _fallback_update(self, original_report: Dict[str, Any], update_info: str) -> Dict[str, Any]:
-        """Fallback method for updating report if LLM fails"""
+        """Fallback method for updating report if OpenAI fails"""
         logger.info("Using fallback report update method")
         
         # Simple fallback - just add update info to description

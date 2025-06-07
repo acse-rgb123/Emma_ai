@@ -7,21 +7,11 @@ from pathlib import Path
 
 from app.config import settings
 
-# AI Provider imports
+# OpenAI import
 try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
-
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
 
 try:
     from .analyzer_fix import extract_name_from_transcript, extract_location_from_transcript
@@ -33,22 +23,13 @@ logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     def __init__(self):
-        self.ai_provider = settings.ai_provider
-        self.api_key = settings.api_key
+        if not OpenAI:
+            raise ImportError("OpenAI package is required but not installed")
+        if not settings.openai_api_key:
+            raise ValueError("OpenAI API key is required but not provided")
+        
+        self.client = OpenAI(api_key=settings.openai_api_key)
         self.template = self._load_template()
-        self._setup_ai_client()
-    
-    def _setup_ai_client(self):
-        """Setup AI client based on provider"""
-        if self.ai_provider == "openai" and OpenAI:
-            self.client = OpenAI(api_key=self.api_key)
-        elif self.ai_provider == "claude" and anthropic:
-            self.client = anthropic.Client(api_key=self.api_key)
-        elif self.ai_provider == "gemini" and genai:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(settings.gemini_model)
-        else:
-            raise ImportError(f"AI provider {self.ai_provider} not available or not installed")
     
     def _load_template(self) -> Dict[str, str]:
         """Load incident report template"""
@@ -90,7 +71,7 @@ class ReportGenerator:
             return self._fallback_generate(transcript, analysis)
     
     async def _ai_generate(self, transcript: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Use AI to generate report"""
+        """Use OpenAI to generate report"""
         try:
             prompt = f"""
             Based on this call transcript and analysis, generate an incident report.
@@ -108,39 +89,17 @@ class ReportGenerator:
             Return as JSON object.
             """
             
-            if self.ai_provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": "You are a social care incident report specialist. Generate detailed, accurate incident reports from transcripts."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                report = json.loads(response.choices[0].message.content)
-            
-            elif self.ai_provider == "claude":
-                response = self.client.messages.create(
-                    model=settings.claude_model,
-                    max_tokens=settings.claude_max_tokens,
-                    system="You are a social care incident report specialist. Generate detailed, accurate incident reports from transcripts. Always respond with valid JSON.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                report = json.loads(response.content[0].text)
-            
-            elif self.ai_provider == "gemini":
-                prompt = f"""You are a social care incident report specialist.
-                {prompt}
-                
-                Return only valid JSON, no additional text or markdown.
-                """
-                response = self.client.generate_content(prompt)
-                json_str = response.text.strip()
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                report = json.loads(json_str.strip())
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
+                temperature=0.3,
+                messages=[
+                    {"role": "system", "content": "You are a social care incident report specialist. Generate detailed, accurate incident reports from transcripts."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+            report = json.loads(response.choices[0].message.content)
             
             # Ensure all fields are present
             for field in self.template.keys():
@@ -150,7 +109,7 @@ class ReportGenerator:
             return report
             
         except Exception as e:
-            logger.error(f"AI generation failed: {e}")
+            logger.error(f"OpenAI generation failed: {e}")
             return None
     
     def _fallback_generate(self, transcript: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -231,7 +190,7 @@ class ReportGenerator:
             return ""
     
     async def regenerate_with_feedback(self, original: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        """Regenerate report with user feedback"""
+        """Regenerate report with user feedback using OpenAI"""
         try:
             prompt = f"""
             Original report:
@@ -244,40 +203,18 @@ class ReportGenerator:
             Maintain the same structure but adjust content based on feedback.
             """
             
-            if self.ai_provider == "openai":
-                response = self.client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": "Update the incident report based on user feedback."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                return json.loads(response.choices[0].message.content)
-            
-            elif self.ai_provider == "claude":
-                response = self.client.messages.create(
-                    model=settings.claude_model,
-                    max_tokens=settings.claude_max_tokens,
-                    system="Update the incident report based on user feedback. Return valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return json.loads(response.content[0].text)
-            
-            elif self.ai_provider == "gemini":
-                prompt = f"""Update the incident report based on user feedback.
-                {prompt}
-                
-                Return only valid JSON, no additional text or markdown.
-                """
-                response = self.client.generate_content(prompt)
-                json_str = response.text.strip()
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                return json.loads(json_str.strip())
+            response = self.client.chat.completions.create(
+                model=settings.openai_model,
+                max_tokens=settings.openai_max_tokens,
+                temperature=0.3,
+                messages=[
+                    {"role": "system", "content": "Update the incident report based on user feedback."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
             
         except Exception as e:
-            logger.error(f"Error regenerating report: {e}")
+            logger.error(f"Error regenerating report with OpenAI: {e}")
             return original

@@ -8,21 +8,11 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"
     api_description: str = "AI-Enhanced Incident Response System for Social Care"
     
-    # AI Provider Configuration
-    ai_provider: str = os.getenv("AI_PROVIDER", "openai")
-    api_key: Optional[str] = os.getenv("API_KEY")
-    
-    # OpenAI specific
+    # OpenAI Configuration (only provider supported)
+    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     openai_model: str = "gpt-4o-mini"
     openai_temperature: float = 0.7
     openai_max_tokens: int = 2000
-    
-    # Claude specific
-    claude_model: str = "claude-3-opus-20240229"
-    claude_max_tokens: int = 2000
-    
-    # Gemini specific
-    gemini_model: str = "gemini-pro"
     
     # CORS Configuration
     cors_origins: list = ["*"]

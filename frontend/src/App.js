@@ -3,7 +3,7 @@ import './App.css';
 import ChatInterface from './components/ChatInterface';
 import IncidentReport from './components/IncidentReport';
 import EmailDraft from './components/EmailDraft';
-import ProviderSelector from './components/ProviderSelector';
+import ApiKeyModal from './components/ApiKeyModal';
 import { analyzeTranscript, updateAnalysis, checkHealth } from './services/api';
 
 function App() {
@@ -15,14 +15,22 @@ function App() {
   const [systemStatus, setSystemStatus] = useState(null);
   const [updateCounter, setUpdateCounter] = useState(0); // Force re-render
   const [updateSuccess, setUpdateSuccess] = useState(null); // Track successful updates
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   useEffect(() => {
     // Check system health on load
     checkHealth().then(status => {
       setSystemStatus(status);
       console.log('System status:', status);
+      
+      // Show API key modal if not configured
+      if (!status.ai_configured) {
+        setShowApiKeyModal(true);
+      }
     }).catch(err => {
       console.error('Health check failed:', err);
+      // Show API key modal if health check fails
+      setShowApiKeyModal(true);
     });
   }, []);
 
@@ -94,6 +102,31 @@ function App() {
       incident_report: updatedReport
     }));
     setUpdateCounter(prev => prev + 1);
+  };
+
+  const handleApiKeySave = async (apiKey) => {
+    try {
+      const response = await fetch('/api/update_keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ openai_key: apiKey })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Refresh system status
+        const status = await checkHealth();
+        setSystemStatus(status);
+        return { success: true };
+      } else {
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   };
 
   const renderContent = () => {
@@ -238,17 +271,18 @@ function App() {
               <div className="system-status">
                 <span className={`status-indicator ${systemStatus.ai_configured ? 'active' : 'inactive'}`}></span>
                 <span className="status-text">
-                  {systemStatus.ai_provider} {systemStatus.ai_configured ? 'Connected' : 'Not Configured'}
+                  OpenAI {systemStatus.ai_configured ? 'Connected' : 'API Key Required'}
                 </span>
               </div>
             )}
           </div>
           <div className="header-controls">
-            <ProviderSelector onProviderChange={(provider) => {
-              console.log('Provider changed to:', provider);
-              // Refresh system status
-              checkHealth().then(setSystemStatus);
-            }} />
+            <button 
+              onClick={() => setShowApiKeyModal(true)}
+              className="btn btn-secondary api-key-btn"
+            >
+              ⚙️ Configure API Key
+            </button>
           </div>
         </div>
       </header>
@@ -297,6 +331,12 @@ function App() {
         <p>&copy; 2024 Emma Care Systems. All rights reserved.</p>
         <p className="session-info">Session ID: {sessionId}</p>
       </footer>
+
+      <ApiKeyModal 
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSave={handleApiKeySave}
+      />
     </div>
   );
 }
